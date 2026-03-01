@@ -92,6 +92,30 @@ APP_NAME = "{app_name}"
 DATABASE = "{database}"
 SCHEMA = "{schema}"
 
+# --- display labels (presentation layer only - raw values remain in SQL, session_state, audit logs) ---
+# see brand-identity for the full mapping spec and usage rules
+REGION_LABELS  = {
+    "AR": "Arkansas", "TX": "Texas", "LA": "Louisiana", "MO": "Missouri",
+    "OK": "Oklahoma", "TN": "Tennessee", "KS": "Kansas",
+}
+SEGMENT_LABELS = {
+    "PERSONAL_AUTO": "Personal auto", "COMMERCIAL_PROPERTY": "Commercial property",
+    "COMMERCIAL_VAN": "Commercial van", "HOME": "Home",
+    "PERSONAL_MOTORBIKE": "Personal motorbike",
+}
+CHANNEL_LABELS = {"AGENT": "Agent", "BROKER": "Broker", "DIRECT": "Direct"}
+OUTCOME_LABELS = {
+    "RENEWED": "Renewed", "LAPSED": "Lapsed",
+    "NOT_TAKEN_UP": "Not taken up", "CANCELLED": "Cancelled",
+}
+BAND_LABELS   = {"0_TO_5": "0-5%", "5_TO_10": "5-10%", "10_TO_15": "10-15%", "GT_15": ">15%"}
+STATUS_LABELS = {"OPEN": "Open", "REVIEWED": "Reviewed"}
+REGION_LABELS_REV  = {v: k for k, v in REGION_LABELS.items()}
+SEGMENT_LABELS_REV = {v: k for k, v in SEGMENT_LABELS.items()}
+CHANNEL_LABELS_REV = {v: k for k, v in CHANNEL_LABELS.items()}
+OUTCOME_DISPLAY_ORDER = ["Renewed", "Lapsed", "Not taken up", "Cancelled"]
+BAND_DISPLAY_ORDER    = ["0-5%", "5-10%", "10-15%", ">15%"]
+
 # --- cached data loader ---
 # call get_active_session() INSIDE the function, never capture module-level session
 # MANDATORY: SELECT DISTINCT queries MUST include WHERE col IS NOT NULL
@@ -237,6 +261,11 @@ elif page == "Activity Log":
    - missing `labelAngle=0` on X axis with categorical data: WARN
    - `alt.Legend(` missing `orient="top"`: WARN
    - non-compliant color hex values: WARN
+   - display label checks (see brand-identity for full spec):
+     - `REGION_LABELS` defined: WARN if missing
+     - multiselect without `format_func`: WARN - each multiselect must have `format_func=lambda x: LABELS.get(x, x)`
+     - `scope_parts.append(flag_region)` or `scope_parts.append(flag_segment)` or `scope_parts.append(flag_channel)`:
+       FAIL - scope must append type label strings ("REGION", "SEGMENT", "CHANNEL"), not the selected values
 
 6. if any forbidden pattern count > 0 or FAIL results: fix all occurrences using replace_all,
    then re-run `python -m py_compile` and re-run the full scan.

@@ -129,6 +129,88 @@ for segment labels (can be long): always set `axis=alt.Axis(labelLimit=200)` on 
 
 ---
 
+## display labels
+
+all raw database values MUST be transformed to human-readable text before display.
+this applies to every chart, filter widget, and table in the dashboard.
+SQL queries, session_state values, and audit log payloads always use raw values - only the presentation layer changes.
+
+### label mapping dictionaries
+
+define these constants in `dashboard.py` after the DATABASE/SCHEMA/APP_NAME block and before the cached data loader:
+
+```python
+REGION_LABELS  = {
+    "AR": "Arkansas", "TX": "Texas", "LA": "Louisiana", "MO": "Missouri",
+    "OK": "Oklahoma", "TN": "Tennessee", "KS": "Kansas",
+}
+SEGMENT_LABELS = {
+    "PERSONAL_AUTO": "Personal auto", "COMMERCIAL_PROPERTY": "Commercial property",
+    "COMMERCIAL_VAN": "Commercial van", "HOME": "Home",
+    "PERSONAL_MOTORBIKE": "Personal motorbike",
+}
+CHANNEL_LABELS = {"AGENT": "Agent", "BROKER": "Broker", "DIRECT": "Direct"}
+OUTCOME_LABELS = {
+    "RENEWED": "Renewed", "LAPSED": "Lapsed",
+    "NOT_TAKEN_UP": "Not taken up", "CANCELLED": "Cancelled",
+}
+BAND_LABELS    = {
+    "0_TO_5": "0-5%", "5_TO_10": "5-10%",
+    "10_TO_15": "10-15%", "GT_15": ">15%",
+}
+STATUS_LABELS  = {"OPEN": "Open", "REVIEWED": "Reviewed"}
+
+# reverse mappings (display -> raw) - used to convert selectbox/multiselect results back to raw values before SQL
+REGION_LABELS_REV  = {v: k for k, v in REGION_LABELS.items()}
+SEGMENT_LABELS_REV = {v: k for k, v in SEGMENT_LABELS.items()}
+CHANNEL_LABELS_REV = {v: k for k, v in CHANNEL_LABELS.items()}
+
+# display sort orders (logical, not alphabetical) - use for Altair domain/sort params
+OUTCOME_DISPLAY_ORDER = ["Renewed", "Lapsed", "Not taken up", "Cancelled"]
+BAND_DISPLAY_ORDER    = ["0-5%", "5-10%", "10-15%", ">15%"]
+```
+
+### usage rules
+
+**sidebar filter widgets (multiselect):** add `format_func` to show display labels while storing raw values in session_state:
+```python
+sel_regions = st.sidebar.multiselect(
+    "Region", VALID_REGIONS, key="sel_regions",
+    format_func=lambda x: REGION_LABELS.get(x, x)
+)
+```
+session_state still stores raw values (["TX", "LA"]) - do NOT convert them to display labels.
+
+**charts:** add a display column to the DataFrame before Altair encoding:
+```python
+df["region_display"]  = df["region"].map(REGION_LABELS)
+df["outcome_display"] = df["renewal_outcome"].map(OUTCOME_LABELS)
+df["band_display"]    = df["price_shock_band"].map(BAND_LABELS)
+# use the display column in Altair encoding, not the raw column
+alt.X("region_display:N", ...)
+alt.Color("outcome_display:N", domain=OUTCOME_DISPLAY_ORDER, ...)
+```
+
+**flag form selectboxes (page 2):** display labels, but convert back to raw before SQL:
+```python
+flag_region_display = st.selectbox("Region", [""] + [REGION_LABELS[r] for r in VALID_REGIONS])
+flag_region = REGION_LABELS_REV.get(flag_region_display)  # raw value for SQL
+```
+
+**tables (page 3):** map display columns after query, before rendering:
+```python
+df["status"] = df["STATUS"].map(STATUS_LABELS)
+df["scope_region"] = df["SCOPE_REGION"].map(REGION_LABELS)
+```
+
+**data integrity rules - NO EXCEPTIONS:**
+- SQL WHERE clauses always use raw values: `WHERE region IN ('TX', 'LA')` - never "Texas"
+- session_state stores raw values: `st.session_state["sel_regions"] = ["TX"]` - never "Texas"
+- audit log payloads use raw constants: `log_audit_event("FILTER_CHANGE", ...)` - never "Filter change"
+- whitelist validation uses raw VALID_REGIONS list: `[r for r in user_selected if r in VALID_REGIONS]`
+
+---
+
 ## heatmap implementation
 
 the renewal_rate heatmap on page 2 uses `st.dataframe` with pandas styling.
@@ -185,3 +267,7 @@ st.dataframe(styled, use_container_width=True)
 - KPI labels are sentence case with no abbreviations
 - `.map()` used (not `.applymap()`) for all pandas styling
 - all `alt.X()` and `alt.Y()` encodings have explicit `title=` (except time-series X which uses `title=None`)
+- REGION_LABELS, SEGMENT_LABELS, CHANNEL_LABELS, OUTCOME_LABELS, BAND_LABELS, STATUS_LABELS defined in dashboard.py
+- all multiselect widgets have `format_func` referencing the appropriate label dict
+- all chart DataFrames have display columns mapped before Altair encoding (e.g. `region_display`, `outcome_display`)
+- SQL queries, session_state values, and audit log payloads use raw values only (never display labels)

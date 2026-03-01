@@ -667,7 +667,16 @@ flag for review section:
 - selectbox: Region (blank first option), Segment (blank first option), Channel (blank first option)
 - text_input: Reason (required)
 - submit button disabled unless at least one dimension is non-blank AND reason is non-empty
-- derive scope: join selected dimension names with `_` (e.g. `REGION_CHANNEL`, `SEGMENT`)
+- derive scope: join selected dimension TYPE LABELS with `_` (e.g. `REGION_CHANNEL`, `SEGMENT`).
+  type labels are fixed string constants - always "REGION", "SEGMENT", "CHANNEL" - never the selected values.
+  ```python
+  scope_parts = []
+  if flag_region:   scope_parts.append("REGION");   scope_region = flag_region
+  if flag_segment:  scope_parts.append("SEGMENT");  scope_segment = flag_segment
+  if flag_channel:  scope_parts.append("CHANNEL");  scope_channel = flag_channel
+  scope = "_".join(scope_parts)
+  ```
+  WRONG: `scope_parts.append(flag_region)` appends the selected value ("TX", "LA") not the type label.
 - on submit: `INSERT INTO {database}.{schema}.RENEWAL_FLAGS (flagged_by, scope, scope_region, scope_segment, scope_channel, flag_reason)` with `CURRENT_SIS_USER` for flagged_by
 - then: `log_audit_event("FLAG_ADDED", "USER_INTERACTION", "page_2_premium_pressure", "flag_for_review", "flag_submitted")`
 - show `st.success()` with the returned flag_id

@@ -1,0 +1,358 @@
+# renewal radar semantic model
+# single source of truth for table schemas, relationships, and business metrics.
+# compatible with snowflake cortex analyst semantic model specification.
+#
+# placeholder notation: {database} and {schema} are substituted from AGENTS.md environment table.
+# logging infrastructure tables (AUDIT_LOG, APP_EVENTS) are operational, not analytical,
+# and are not included here. see sql/04_logging_infrastructure.sql for their DDL.
+
+name: renewal_radar
+description: >
+  insurance renewal analytics model covering 3 source tables and 1 domain table.
+  tracks renewal outcomes, premium pricing events, policy master data, and
+  user-submitted review flags for a mid-south US commercial insurance portfolio.
+
+tables:
+  - name: FACT_RENEWAL
+    base_table:
+      database: "{database}"
+      schema: "{schema}"
+      table: FACT_RENEWAL
+    description: >
+      grain: one row per (policy_id, renewal_date). tracks renewal outcomes,
+      quoting activity, and service turnaround for each policy renewal cycle.
+    dimensions:
+      - name: policy_id
+        expr: policy_id
+        data_type: VARCHAR(10)
+        description: "policy identifier. PK grain with renewal_date."
+      - name: client_id
+        expr: client_id
+        data_type: VARCHAR(10)
+        description: "client identifier."
+      - name: region
+        expr: region
+        data_type: VARCHAR(2)
+        description: "2-letter region code. values: TX, MO, LA, TN, OK, KS, AR."
+      - name: segment
+        expr: segment
+        data_type: VARCHAR(30)
+        description: "business segment."
+      - name: product_variant
+        expr: product_variant
+        data_type: VARCHAR(20)
+        description: "product variant."
+      - name: channel
+        expr: channel
+        data_type: VARCHAR(20)
+        description: "distribution channel. values: AGENT, BROKER, DIRECT."
+      - name: agent_id
+        expr: agent_id
+        data_type: VARCHAR(10)
+        description: "agent identifier. NULL for DIRECT channel."
+      - name: renewal_outcome
+        expr: renewal_outcome
+        data_type: VARCHAR(20)
+        description: "values: RENEWED, LAPSED, NOT_TAKEN_UP, CANCELLED."
+    time_dimensions:
+      - name: renewal_date
+        expr: renewal_date
+        data_type: DATE
+        description: "date of the renewal event."
+    measures:
+      - name: is_quoted
+        expr: is_quoted
+        data_type: NUMBER(1)
+        description: "1 if policy was quoted."
+      - name: is_bound
+        expr: is_bound
+        data_type: NUMBER(1)
+        description: "1 if policy was bound."
+      - name: is_renewed
+        expr: is_renewed
+        data_type: NUMBER(1)
+        description: "1 if policy was renewed."
+      - name: quote_tta
+        expr: quote_tta
+        data_type: FLOAT
+        description: "actual quote turnaround time in hours."
+      - name: target_tta_hours
+        expr: target_tta_hours
+        data_type: FLOAT
+        description: "target turnaround time in hours."
+      - name: renewal_rate
+        expr: "SUM(is_renewed) / COUNT(*)"
+        data_type: FLOAT
+        description: "proportion of policies renewed."
+      - name: leakage_rate
+        expr: "1 - (SUM(is_renewed) / COUNT(*))"
+        data_type: FLOAT
+        description: "proportion of policies not renewed (1 - renewal_rate)."
+      - name: quote_to_bind
+        expr: "SUM(is_bound) / NULLIF(SUM(is_quoted), 0)"
+        data_type: FLOAT
+        description: "ratio of bound policies to quoted policies."
+      - name: service_delay_idx
+        expr: "AVG(quote_tta / target_tta_hours)"
+        data_type: FLOAT
+        description: "average ratio of actual turnaround to target turnaround. >1 means slower than target."
+
+  - name: FACT_PREMIUM_EVENT
+    base_table:
+      database: "{database}"
+      schema: "{schema}"
+      table: FACT_PREMIUM_EVENT
+    description: >
+      grain: one row per pricing_event_id. tracks premium quoting events
+      including initial, revised, and final offer pricing.
+    dimensions:
+      - name: pricing_event_id
+        expr: pricing_event_id
+        data_type: VARCHAR(30)
+        description: "PK."
+      - name: policy_id
+        expr: policy_id
+        data_type: VARCHAR(10)
+        description: "policy identifier. FK to FACT_RENEWAL and DIM_POLICY."
+      - name: client_id
+        expr: client_id
+        data_type: VARCHAR(10)
+        description: "client identifier."
+      - name: event_seq
+        expr: event_seq
+        data_type: NUMBER(2)
+        description: "sequence number within policy renewal cycle."
+      - name: event_type
+        expr: event_type
+        data_type: VARCHAR(20)
+        description: "values: INITIAL_QUOTE, REVISED_QUOTE, FINAL_OFFER."
+      - name: is_final_offer
+        expr: is_final_offer
+        data_type: NUMBER(1)
+        description: "1 if this is the final pricing offer."
+      - name: source_system
+        expr: source_system
+        data_type: VARCHAR(30)
+        description: "originating system."
+      - name: region
+        expr: region
+        data_type: VARCHAR(2)
+        description: "2-letter region code."
+      - name: segment
+        expr: segment
+        data_type: VARCHAR(30)
+        description: "business segment."
+      - name: channel
+        expr: channel
+        data_type: VARCHAR(20)
+        description: "distribution channel."
+      - name: agent_id
+        expr: agent_id
+        data_type: VARCHAR(10)
+        description: "agent identifier."
+      - name: discount_reason
+        expr: discount_reason
+        data_type: VARCHAR(100)
+        description: "reason for discount, if applied."
+      - name: renewal_outcome
+        expr: renewal_outcome
+        data_type: VARCHAR(20)
+        description: "values: RENEWED, LAPSED, NOT_TAKEN_UP, CANCELLED. may be NULL for non-renewed events."
+    time_dimensions:
+      - name: renewal_date
+        expr: renewal_date
+        data_type: DATE
+        description: "date of the renewal event."
+      - name: event_ts
+        expr: event_ts
+        data_type: TIMESTAMP_NTZ
+        description: "timestamp of the pricing event."
+    measures:
+      - name: expiring_premium
+        expr: expiring_premium
+        data_type: FLOAT
+        description: "premium amount on the expiring policy."
+      - name: offered_premium
+        expr: offered_premium
+        data_type: FLOAT
+        description: "premium amount offered for renewal."
+      - name: discount_amt
+        expr: discount_amt
+        data_type: FLOAT
+        description: "discount amount applied."
+      - name: discount_pct
+        expr: discount_pct
+        data_type: FLOAT
+        description: "discount percentage applied."
+      - name: premium_change_pct
+        expr: "(offered_premium - expiring_premium) / expiring_premium"
+        data_type: FLOAT
+        description: "percentage change in premium. use WHERE is_final_offer = 1 for accurate final pricing."
+      - name: price_shock_band
+        expr: >
+          CASE
+            WHEN (offered_premium - expiring_premium) / expiring_premium <= 0.05 THEN '0_TO_5'
+            WHEN (offered_premium - expiring_premium) / expiring_premium <= 0.10 THEN '5_TO_10'
+            WHEN (offered_premium - expiring_premium) / expiring_premium <= 0.15 THEN '10_TO_15'
+            ELSE 'GT_15'
+          END
+        data_type: VARCHAR(10)
+        description: "bucketed premium change for heatmap analysis."
+
+  - name: DIM_POLICY
+    base_table:
+      database: "{database}"
+      schema: "{schema}"
+      table: DIM_POLICY
+    description: >
+      grain: one row per policy_id. policy master data including inception,
+      renewal dates, coverage bands, and risk classification.
+    dimensions:
+      - name: policy_id
+        expr: policy_id
+        data_type: VARCHAR(10)
+        description: "PK."
+      - name: client_id
+        expr: client_id
+        data_type: VARCHAR(10)
+        description: "client identifier."
+      - name: segment
+        expr: segment
+        data_type: VARCHAR(30)
+        description: "business segment."
+      - name: region
+        expr: region
+        data_type: VARCHAR(2)
+        description: "2-letter region code."
+      - name: product_variant
+        expr: product_variant
+        data_type: VARCHAR(20)
+        description: "product variant."
+      - name: sum_insured_band
+        expr: sum_insured_band
+        data_type: VARCHAR(10)
+        description: "values: LOW, MEDIUM, HIGH."
+      - name: risk_tier
+        expr: risk_tier
+        data_type: VARCHAR(15)
+        description: "values: PREFERRED, STANDARD, HIGH_RISK."
+      - name: payment_frequency
+        expr: payment_frequency
+        data_type: VARCHAR(15)
+        description: "payment frequency."
+      - name: auto_renewal_flag
+        expr: auto_renewal_flag
+        data_type: NUMBER(1)
+        description: "1 if policy is set to auto-renew."
+    time_dimensions:
+      - name: date_inception
+        expr: date_inception
+        data_type: DATE
+        description: "policy inception date."
+      - name: date_last_renewal
+        expr: date_last_renewal
+        data_type: DATE
+        description: "date of most recent renewal."
+      - name: date_next_renewal
+        expr: date_next_renewal
+        data_type: DATE
+        description: "date of next scheduled renewal."
+    measures:
+      - name: annual_aggregate_limit
+        expr: annual_aggregate_limit
+        data_type: FLOAT
+        description: "annual aggregate coverage limit."
+      - name: per_occurrence_limit
+        expr: per_occurrence_limit
+        data_type: FLOAT
+        description: "per-occurrence coverage limit."
+      - name: policy_excess
+        expr: policy_excess
+        data_type: FLOAT
+        description: "policy excess (deductible) amount."
+
+  - name: RENEWAL_FLAGS
+    base_table:
+      database: "{database}"
+      schema: "{schema}"
+      table: RENEWAL_FLAGS
+    description: >
+      domain table. stores user-submitted flags for review from the dashboard.
+      written by page 2 (premium pressure), read by page 3 (activity log).
+    dimensions:
+      - name: flag_id
+        expr: flag_id
+        data_type: VARCHAR(40)
+        description: "PK. default UUID_STRING()."
+      - name: flagged_by
+        expr: flagged_by
+        data_type: VARCHAR(100)
+        description: "SiS user who flagged. populated explicitly by app, NOT CURRENT_USER()."
+      - name: scope
+        expr: scope
+        data_type: VARCHAR(50)
+        description: "any combination of REGION/SEGMENT/CHANNEL joined by '_'."
+      - name: scope_region
+        expr: scope_region
+        data_type: VARCHAR(50)
+        description: "NULL when not scoped to a region."
+      - name: scope_segment
+        expr: scope_segment
+        data_type: VARCHAR(50)
+        description: "NULL when not scoped to a segment."
+      - name: scope_channel
+        expr: scope_channel
+        data_type: VARCHAR(50)
+        description: "NULL when not scoped to a channel."
+      - name: flag_reason
+        expr: flag_reason
+        data_type: VARCHAR(200)
+        description: "reason for flagging."
+      - name: status
+        expr: status
+        data_type: VARCHAR(20)
+        description: "values: OPEN, REVIEWED. default OPEN."
+      - name: reviewed_by
+        expr: reviewed_by
+        data_type: VARCHAR(100)
+        description: "SiS user who reviewed."
+      - name: notes
+        expr: notes
+        data_type: VARCHAR(500)
+        description: "review notes."
+    time_dimensions:
+      - name: flagged_at
+        expr: flagged_at
+        data_type: TIMESTAMP_NTZ
+        description: "timestamp when flag was created. default CURRENT_TIMESTAMP()."
+      - name: reviewed_at
+        expr: reviewed_at
+        data_type: TIMESTAMP_NTZ
+        description: "timestamp when flag was reviewed."
+
+# relationships (for cortex analyst join inference and documentation)
+relationships:
+  - name: renewal_to_premium_event
+    left_table: FACT_RENEWAL
+    right_table: FACT_PREMIUM_EVENT
+    join_type: inner
+    relationship_columns:
+      - left_column: policy_id
+        right_column: policy_id
+    description: "join renewal outcomes to premium pricing events. many premium events per renewal."
+  - name: renewal_to_policy
+    left_table: FACT_RENEWAL
+    right_table: DIM_POLICY
+    join_type: inner
+    relationship_columns:
+      - left_column: policy_id
+        right_column: policy_id
+    description: "join renewal outcomes to policy master data."
+  - name: premium_event_to_policy
+    left_table: FACT_PREMIUM_EVENT
+    right_table: DIM_POLICY
+    join_type: inner
+    relationship_columns:
+      - left_column: policy_id
+        right_column: policy_id
+    description: "join premium events to policy master data."

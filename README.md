@@ -1,9 +1,12 @@
 # cortex code hub
 
-this repository contains knowledge and examples for working with cortex code.
+knowledge base for working with cortex code cli - notes, guides, findings, and end-to-end demos.
 
-## contents
-1. [concepts](concepts/) - core ideas and mechanisms
-2. [guides](guides/) - short how-to instructions
-3. [use_cases](use_cases/) - usage scenarios
-4. [demos](demos/) - demos and experiments
+## table of contents
+
+| section | description |
+|---|---|
+| [concepts/](concepts/) | core concepts: what cortex code cli is, sessions, skills, context injection, AGENTS.md |
+| [guides/](guides/) | how-to: write AGENTS.md, create skills, write prompts, debug sessions |
+| [use_cases/](use_cases/) | when and how to use cortex code for specific task types |
+| [demos/](demos/) | complete end-to-end projects with AGENTS.md, prompts, skills, and session reports |

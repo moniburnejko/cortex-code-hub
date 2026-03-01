@@ -6,14 +6,13 @@ end-to-end demonstration: infrastructure setup, data load, streamlit app build, 
 
 ## contents
 
-| file / folder | description |
+| file | description |
 |---|---|
 | [AGENTS.md](AGENTS.md) | project spec - single source of truth for the agent |
 | [prompts.md](prompts.md) | 4-phase session prompts with acceptance checkpoints |
-| [skills/](skills/) | 7 skills invoked by the agent |
-| [sql/](sql/) | DDL for source tables, domain tables, stage, and logging infrastructure |
-| [semantic_model.yaml](semantic_model.yaml) | Cortex Analyst semantic model for the renewal domain |
-| [reports/](reports/) | session reports from each cortex code cli run |
+| [final_report.md](final_report.md) | acceptance report covering all four phases |
+
+full source - skills, sql, reports, dashboard code: [moniburnejko/cortex-sis-dashboard](https://github.com/moniburnejko/cortex-sis-dashboard)
 
 ## key findings
 

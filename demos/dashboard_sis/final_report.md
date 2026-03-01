@@ -2,9 +2,10 @@
 
 **date:** 2026-03-01
 **scope:** phase 1 (run 02), phase 2 (run 04), phase 3 (run 01), code review
-**environment:** CORTEX_DB.CORTEX_SCHEMA, role CORTEX_ADMIN, warehouse CORTEX_WH
+**environment:** CORTEX_DB.CORTEX_SCHEMA, role CORTEX_ADMIN, warehouse CORTEX_WH
+
 **model:** claude-sonnet-4-5
-**dashboard:** RENEWAL_RADAR (707 lines, 3 pages, deployed at CORTEX_DB.CORTEX_SCHEMA)
+**dashboard:** RENEWAL_RADAR (707 lines, 3 pages, deployed at CORTEX_DB.CORTEX_SCHEMA)
 
 ---
 
